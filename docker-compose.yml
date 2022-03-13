@@ -1,0 +1,6 @@
+services:
+  monty:
+    build: .
+    ports:
+      - "8000:8000"
+    command: gunicorn -b 0.0.0.0:8000 monty.wsgi:app

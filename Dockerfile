@@ -9,7 +9,9 @@ ENV PYTHONPATH=$APP_HOME
 
 WORKDIR $APP_HOME
 
-RUN apt-get update && pip install poetry
+RUN apt-get update && pip install poetry==1.1.13 \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml poetry.lock ./
 

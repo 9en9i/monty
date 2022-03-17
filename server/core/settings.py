@@ -4,5 +4,5 @@ HOME_DIR = Path(__file__).resolve().parent.parent
 
 
 INSTALLED_APPS = [
-    "monty.books",
+    "server.books",
 ]

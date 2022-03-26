@@ -1,7 +1,7 @@
 import pytest
 from httpx import Client
 
-from wsgi import app
+from server.wsgi import app
 
 
 @pytest.fixture

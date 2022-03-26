@@ -1,5 +1,6 @@
 import importlib
-from abc import ABC, abstractmethod
+import inspect
+from abc import ABC
 from typing import Iterable, Callable, Optional
 
 import parse
@@ -12,10 +13,17 @@ from monty.core.exceptions import DuplicatedUrl
 class Monty(ABC):
     def __init__(self, name: str):
         self.route = {}
-        for i in importlib.import_module(name + ".core.settings").__getattribute__("INSTALLED_APPS"):
+        self.errors_cls = {}
+        settings = importlib.import_module(name + ".core.settings")
+        for i in settings.__getattribute__("INSTALLED_APPS"):
             self.include(i)
+        for path_cls in settings.__getattribute__("EXCEPTIONS"):
+            name_cls = path_cls.split(".")[-1]
+            path = ".".join(path_cls.split(".")[:-1])
+            obj = importlib.import_module(name + f".{path}").__getattribute__(name_cls)()
+            self.errors_cls[obj.type_error] = obj
 
-    def find_method(self, handlers: Iterable[tuple], path: str, method: str) -> (Optional[Callable], Optional[dict]):
+    def find_method(self, handlers: Iterable[tuple], path: str, method: str) -> tuple[Optional[Callable], Optional[dict]]:
         for handler in handlers:
             if (result := parse.parse(handler[1], path)) and method == handler[0]:
                 return handler[2], result.named
@@ -31,17 +39,24 @@ class Monty(ABC):
 class AsgiMixin:
 
     async def __call__(self, scope: HTTPScope, receive, send):
-
         response = await self.handle_request(scope)
         await response(scope, receive, send)
 
     async def handle_request(self: "Monty", request: dict) -> PlainTextResponse:
-        for path, handlers in self.route.items():
-            if request["path"].startswith(path):
-                method, kwargs = self.find_method(handlers, request["path"], request["method"])
-                if method:
-                    response = await method(request, **kwargs)
-                    return response
+        try:
+            for path, handlers in self.route.items():
+                if request.get("path", "").startswith(path):
+                    method, kwargs = self.find_method(handlers, request["path"], request["method"])
+                    if method:
+                        response = method(request, **kwargs)
+                        if inspect.iscoroutine(response):
+                            response = await response
+                        return response
+        except Exception as e:
+            if not self.errors_cls:
+                raise e
+            else:
+                return self.errors_cls[type(e)].handler(e)
 
         response = self.default_response()
         return response
